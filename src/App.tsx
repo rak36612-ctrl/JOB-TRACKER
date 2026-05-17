@@ -10,7 +10,6 @@ import {
   CheckCircle2,
   Filter,
   Star,
-  Settings,
   ArrowRight,
   Sparkles
 } from 'lucide-react';
