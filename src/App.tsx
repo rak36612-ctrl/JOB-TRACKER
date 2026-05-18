@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Search, 
   MapPin, 
@@ -31,46 +31,57 @@ interface Job {
   tags: string[];
 }
 
-// --- Mock Data Generator (200 Jobs) ---
-const generateJobs = (): Job[] => {
-  const titles = ['Frontend Engineer', 'Backend Developer', 'Full Stack Engineer', 'UI/UX Designer', 'Data Scientist', 'DevOps Specialist', 'Product Manager', 'Cloud Architect'];
-  const companies = ['TechCorp Solutions', 'Innovate AI', 'Global Finance Inc', 'E-Commerce Giants', 'HealthTech Connect', 'Acme Systems', 'NextGen Data', 'FutureNet', 'CloudScale Startups', 'Fintech Pro'];
-  const locations = ['San Francisco, CA (Hybrid)', 'Remote', 'New York, NY (On-site)', 'Austin, TX (Hybrid)', 'Seattle, WA', 'Chicago, IL', 'London, UK (Remote)'];
-  const types = ['Full-time', 'Contract', 'Part-time'];
-  const tagsList = ['React', 'TypeScript', 'Node.js', 'Python', 'AWS', 'GraphQL', 'Docker', 'Kubernetes', 'Figma', 'SQL', 'PostgreSQL', 'Tailwind CSS'];
-
-  return Array.from({ length: 200 }).map((_, index) => {
-    const title = titles[Math.floor(Math.random() * titles.length)];
-    const company = companies[Math.floor(Math.random() * companies.length)];
-    const matchScore = Math.floor(Math.random() * 30) + 70; // 70 to 99
-    
-    const shuffledTags = [...tagsList].sort(() => 0.5 - Math.random());
-    const jobTags = shuffledTags.slice(0, 3);
-
-    return {
-      id: String(index + 1),
-      title: `${title}${index % 5 === 0 ? ' (Senior)' : ''}`,
-      company: company,
-      location: locations[Math.floor(Math.random() * locations.length)],
-      type: types[Math.floor(Math.random() * types.length)],
-      salary: `$${Math.floor(Math.random() * 50) + 80}k - $${Math.floor(Math.random() * 50) + 150}k`,
-      postedAt: `${Math.floor(Math.random() * 23) + 1} hours ago`,
-      matchScore,
-      status: 'new',
-      description: `We are looking for a highly motivated ${title} to join our growing team at ${company}. You will be working on cutting edge technologies to solve complex problems at scale. Strong communication skills and experience with ${jobTags.join(', ')} are required.`,
-      tags: jobTags
-    };
-  });
-};
-
-const MOCK_JOBS = generateJobs();
+// Real jobs will be fetched directly via Remotive API inside useEffect.
 
 function App() {
   const [isOnboarded, setIsOnboarded] = useState(false);
   const [userName, setUserName] = useState('');
   const [qualification, setQualification] = useState('');
   
-  const [jobs, setJobs] = useState<Job[]>(MOCK_JOBS);
+  const [jobs, setJobs] = useState<Job[]>([]);
+  const [loadingJobs, setLoadingJobs] = useState(false);
+
+  useEffect(() => {
+    const fetchRealJobs = async () => {
+      setLoadingJobs(true);
+      try {
+        const res = await fetch("https://remotive.com/api/remote-jobs?category=software-dev&limit=150");
+        const data = await res.json();
+        
+        const realJobs: Job[] = data.jobs.slice(0, 200).map((apiJob: any) => {
+          let descriptionStr = (apiJob.description || "").replace(/<[^>]*>?/gm, "").substring(0, 300) + "...";
+          let locationStr = apiJob.candidate_required_location || "Remote Anywhere";
+          let tags = apiJob.tags && apiJob.tags.length > 0 ? apiJob.tags.slice(0, 4) : ["Software Engineering"];
+          let matchScore = Math.floor(Math.random() * 30) + 70; // Simulate match
+          
+          let dateDiff = Math.floor((new Date().getTime() - new Date(apiJob.publication_date).getTime()) / (1000 * 3600 * 24));
+          let postedStr = dateDiff === 0 ? "Today" : dateDiff + " days ago";
+
+          return {
+            id: String(apiJob.id),
+            title: apiJob.title,
+            company: apiJob.company_name,
+            location: locationStr,
+            type: apiJob.job_type ? apiJob.job_type.replace("_", "-") : "Full-time",
+            salary: apiJob.salary ? apiJob.salary : "Competitive",
+            postedAt: postedStr,
+            matchScore,
+            status: 'new' as JobStatus,
+            description: descriptionStr,
+            tags
+          };
+        });
+        
+        setJobs(realJobs);
+      } catch (err) {
+        console.error("Failed to load jobs", err);
+      } finally {
+        setLoadingJobs(false);
+      }
+    };
+    
+    fetchRealJobs();
+  }, []);
   const [activeTab, setActiveTab] = useState<"discover" | "saved" | "applied">("discover");
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -276,7 +287,12 @@ function App() {
 
         {/* Job List */}
         <div className="grid gap-5">
-          {filteredJobs.length === 0 ? (
+          {loadingJobs ? (
+            <div className="flex flex-col items-center justify-center py-20 text-indigo-500">
+              <Sparkles className="animate-pulse mb-4" size={48} />
+              <p className="text-lg font-medium text-slate-600">Scraping Real IT Jobs from Web...</p>
+            </div>
+          ) : filteredJobs.length === 0 ? (
             <div className="text-center py-16 bg-white rounded-2xl border border-slate-200 shadow-sm animate-fade-in-up delay-300">
               <Briefcase className="w-12 h-12 text-slate-300 mx-auto mb-4" />
               <h3 className="text-lg font-semibold text-slate-900">No jobs found</h3>
